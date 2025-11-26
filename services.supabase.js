@@ -29,11 +29,14 @@
         async signup({ email, password, username, displayName }) {
             const client = getClient();
             if (!client) {
+                console.error('[OrbitApi] Signup: Client not available');
                 return { data: null, error: { message: 'Supabase client not initialized' } };
             }
 
             try {
+                console.log('[OrbitApi] Signup: Attempting signup for', email);
                 // Sign up with email and password
+                // Note: If email confirmation is required, user will need to confirm email before login
                 const { data: authData, error: authError } = await client.auth.signUp({
                     email,
                     password,
@@ -41,11 +44,19 @@
                         data: {
                             username,
                             display_name: displayName
-                        }
+                        },
+                        emailRedirectTo: window.location.origin || 'http://localhost:5500'
                     }
                 });
 
+                console.log('[OrbitApi] Signup response:', { 
+                    hasUser: !!authData?.user, 
+                    hasSession: !!authData?.session,
+                    error: authError 
+                });
+
                 if (authError) {
+                    console.error('[OrbitApi] Signup error:', authError);
                     return { data: null, error: authError };
                 }
 
@@ -65,12 +76,25 @@
 
                     if (profileError) {
                         console.error('[OrbitApi] Profile creation failed:', profileError);
+                        // Don't fail signup if profile creation fails, but log it
                     }
+                }
+
+                // Check if email confirmation is required
+                if (authData.user && !authData.session) {
+                    return { 
+                        data: { user: authData.user }, 
+                        error: { 
+                            message: 'Kayıt başarılı! Email adresinize gönderilen onay linkine tıklayarak hesabınızı aktifleştirin.',
+                            code: 'email_confirmation_required'
+                        } 
+                    };
                 }
 
                 return { data: { user: authData.user }, error: null };
             } catch (error) {
-                return { data: null, error: { message: error.message } };
+                console.error('[OrbitApi] Signup exception:', error);
+                return { data: null, error: { message: error.message || 'Kayıt başarısız' } };
             }
         },
 
@@ -87,12 +111,31 @@
                 });
 
                 if (error) {
+                    console.error('[OrbitApi] Login error:', error);
+                    // Check if email needs confirmation
+                    if (error.message?.includes('Email not confirmed') || error.message?.includes('email_not_confirmed')) {
+                        return { 
+                            data: null, 
+                            error: { 
+                                message: 'Email adresinizi onaylamanız gerekiyor. Email kutunuzu kontrol edin.',
+                                code: 'email_not_confirmed'
+                            } 
+                        };
+                    }
                     return { data: null, error };
+                }
+
+                if (!data?.user) {
+                    return { 
+                        data: null, 
+                        error: { message: 'Kullanıcı bulunamadı' } 
+                    };
                 }
 
                 return { data: { user: data.user }, error: null };
             } catch (error) {
-                return { data: null, error: { message: error.message } };
+                console.error('[OrbitApi] Login exception:', error);
+                return { data: null, error: { message: error.message || 'Giriş başarısız' } };
             }
         },
 

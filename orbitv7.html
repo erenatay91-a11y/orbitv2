@@ -10,10 +10,37 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Supabase SDK + public config -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./config.supabase.js"></script>
+    <script>
+      // Supabase Configuration (inline for Vercel compatibility)
+      window.SUPABASE_URL = 'https://cohjxujvdfbsohhlvnus.supabase.co';
+      window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvaGp4dWp2ZGZic29oaGx2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNTAyNTcsImV4cCI6MjA3OTcyNjI1N30.FCmAi1McUKYV4y5tgBxKhY-Yku95JMu8-rtc2TJhdzs';
+      
+      // Try to load from external config file (fallback)
+      if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+        const configScript = document.createElement('script');
+        configScript.src = './config.supabase.js';
+        configScript.onerror = () => console.warn('[Supabase] config.supabase.js not found, using inline config');
+        document.head.appendChild(configScript);
+      }
+    </script>
     <script src="./services.supabase.js"></script>
     <!-- OpenAI config -->
-    <script src="./config.openai.js"></script>
+    <script>
+      // OpenAI Configuration - Load from external file or use environment variable
+      // For Vercel: Set OPENAI_API_KEY as environment variable
+      window.OPENAI_API_KEY = window.OPENAI_API_KEY || '';
+      window.OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+      window.OPENAI_CONFIG = {
+        model: 'gpt-4o-mini',
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      // Try to load from external config file
+      const openaiScript = document.createElement('script');
+      openaiScript.src = './config.openai.js';
+      openaiScript.onerror = () => console.warn('[OpenAI] config.openai.js not found');
+      document.head.appendChild(openaiScript);
+    </script>
     <script>
       // Initialize Supabase client (global)
       try {
@@ -28,14 +55,22 @@
               window.SUPABASE_URL,
               window.SUPABASE_ANON_KEY,
             );
-            console.log("[Supabase] Client initialized");
+            console.log("[Supabase] Client initialized", {
+              url: window.SUPABASE_URL,
+              hasKey: !!window.SUPABASE_ANON_KEY
+            });
             // Simple connectivity check
             window.supabaseClient.auth.getSession().then(({ data, error }) => {
               if (error)
                 console.error("[Supabase] auth.getSession error:", error);
-              else console.log("[Supabase] Session check OK");
+              else console.log("[Supabase] Session check OK", data);
             });
           }
+        } else {
+          console.error("[Supabase] Missing URL or Key", {
+            hasUrl: !!window.SUPABASE_URL,
+            hasKey: !!window.SUPABASE_ANON_KEY
+          });
         }
       } catch (e) {
         console.error("[Supabase] init failed", e);
@@ -471,11 +506,67 @@
                           const un = sanitizeUsername(username);
                           const em = (email || '').trim();
                           const pw = (password || '').trim();
-                          if (!nm || !un || !em || !pw) { setError('Please fill name, username, email and password'); return; }
-                          if (!window.OrbitApi?.auth) { setError('Auth service not ready'); return; }
-                          const { user } = (await window.OrbitApi.auth.signup({ email: em, password: pw, username: un, displayName: nm }))?.data || {};
-                          const prof = user ? await window.OrbitApi.auth.getProfile(user.id) : null;
-                          const payload = { name: prof?.display_name || nm, username: prof?.username || un, avatarColor: 'bg-primary', avatarUrl: prof?.avatar_url || null };
+                          if (!nm || !un || !em || !pw) { setError('Lütfen tüm alanları doldurun'); return; }
+                          
+                          // Debug: Check Supabase connection
+                          console.log('[Signup] Checking Supabase connection...', {
+                              hasSupabaseClient: !!window.supabaseClient,
+                              hasOrbitApi: !!window.OrbitApi,
+                              hasAuth: !!window.OrbitApi?.auth,
+                              supabaseUrl: window.SUPABASE_URL
+                          });
+                          
+                          if (!window.supabaseClient) {
+                              setError('Supabase bağlantısı kurulamadı. Sayfayı yenileyin.');
+                              console.error('[Signup] Supabase client not initialized');
+                              return;
+                          }
+                          
+                          if (!window.OrbitApi?.auth) { 
+                              setError('Auth service not ready'); 
+                              console.error('[Signup] OrbitApi.auth not available');
+                              return; 
+                          }
+                          
+                          console.log('[Signup] Calling signup with:', { email: em, username: un, displayName: nm });
+                          const result = await window.OrbitApi.auth.signup({ email: em, password: pw, username: un, displayName: nm });
+                          console.log('[Signup] Result:', result);
+                          
+                          // Check if email confirmation is required
+                          if (result.error?.code === 'email_confirmation_required') {
+                              setError(result.error.message || 'Email onayı gerekiyor');
+                              // Still proceed with login if session exists
+                              if (result.data?.user) {
+                                  const prof = await window.OrbitApi.auth.getProfile(result.data.user.id);
+                                  const payload = { 
+                                      name: prof?.data?.display_name || nm, 
+                                      username: prof?.data?.username || un, 
+                                      avatarColor: 'bg-primary', 
+                                      avatarUrl: prof?.data?.avatar_url || null 
+                                  };
+                                  onSuccess && onSuccess(payload);
+                              }
+                              return;
+                          }
+                          
+                          if (result.error) {
+                              console.error('Signup error:', result.error);
+                              setError(result.error.message || 'Kayıt başarısız');
+                              return;
+                          }
+                          
+                          if (!result.data?.user) {
+                              setError('Kayıt başarısız. Lütfen tekrar deneyin.');
+                              return;
+                          }
+                          
+                          const prof = await window.OrbitApi.auth.getProfile(result.data.user.id);
+                          const payload = { 
+                              name: prof?.data?.display_name || nm, 
+                              username: prof?.data?.username || un, 
+                              avatarColor: 'bg-primary', 
+                              avatarUrl: prof?.data?.avatar_url || null 
+                          };
                           
                           // Award first signup coins (will be called after onSuccess sets up the coin system)
                           setTimeout(() => {
@@ -498,14 +589,38 @@
                           const pw = (password || '').trim();
                           if (!em || !pw) { setError('Enter email and password'); return; }
                           if (!window.OrbitApi?.auth) { setError('Auth service not ready'); return; }
-                          const { user } = (await window.OrbitApi.auth.login({ email: em, password: pw }))?.data || {};
-                          if (!user) { setError('Login failed'); return; }
-                          const prof = await window.OrbitApi.auth.getProfile(user.id);
-                          const payload = { name: prof?.display_name || 'User', username: prof?.username || '@user', avatarColor: 'bg-primary', avatarUrl: prof?.avatar_url || null };
+                          
+                          const result = await window.OrbitApi.auth.login({ email: em, password: pw });
+                          
+                          if (result.error) {
+                              console.error('Login error:', result.error);
+                              // More specific error messages
+                              if (result.error.message?.includes('Invalid login credentials') || result.error.message?.includes('Email not confirmed')) {
+                                  setError('Email veya şifre hatalı. Email onayınızı kontrol edin.');
+                              } else if (result.error.message?.includes('Email not confirmed')) {
+                                  setError('Email adresinizi onaylamanız gerekiyor. Email kutunuzu kontrol edin.');
+                              } else {
+                                  setError(result.error.message || 'Giriş başarısız. Email ve şifrenizi kontrol edin.');
+                              }
+                              return;
+                          }
+                          
+                          if (!result.data?.user) { 
+                              setError('Giriş başarısız. Email ve şifrenizi kontrol edin.'); 
+                              return; 
+                          }
+                          
+                          const prof = await window.OrbitApi.auth.getProfile(result.data.user.id);
+                          const payload = { 
+                              name: prof?.data?.display_name || 'User', 
+                              username: prof?.data?.username || '@user', 
+                              avatarColor: 'bg-primary', 
+                              avatarUrl: prof?.data?.avatar_url || null 
+                          };
                           onSuccess && onSuccess(payload);
                       } catch (e) {
-                          console.error(e);
-                          setError(e?.message || 'Login failed');
+                          console.error('Login exception:', e);
+                          setError(e?.message || 'Giriş başarısız. Lütfen tekrar deneyin.');
                       }
                   };
 
