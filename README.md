@@ -13,11 +13,28 @@ A modern community platform for mothers to connect, share, and support each othe
 - 🛡️ **Admin Panel**: Content moderation, user management, and analytics
 - 💾 **Local Storage**: All data persists locally
 
-## Netlify Deployment
+## Deployment
 
-This project is ready to deploy on Netlify.
+This project can be deployed on both **Netlify** and **Vercel**.
 
-### Quick Deploy
+### Vercel Deployment (Recommended)
+
+1. **Option 1: GitHub Integration (Easiest)**
+   - Go to [Vercel](https://vercel.com)
+   - Sign in with GitHub
+   - Click "Add New Project"
+   - Import your repository: `erenatay91-a11y/orbitv2`
+   - Vercel will automatically detect the configuration
+   - Click "Deploy"
+
+2. **Option 2: Vercel CLI**
+   ```bash
+   npm install -g vercel
+   vercel
+   vercel --prod
+   ```
+
+### Netlify Deployment
 
 1. **Option 1: Drag & Drop**
    - Go to [Netlify Drop](https://app.netlify.com/drop)
@@ -36,9 +53,10 @@ This project is ready to deploy on Netlify.
 
 ### Configuration Files
 
+- `vercel.json`: Vercel deployment configuration
 - `netlify.toml`: Netlify build and redirect configuration
-- `_redirects`: SPA routing rules
-- `_headers`: Security and cache headers
+- `_redirects`: SPA routing rules (Netlify)
+- `_headers`: Security and cache headers (Netlify)
 
 ### Important Notes
 
