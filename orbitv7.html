@@ -550,17 +550,42 @@
                           }
                           
                           if (result.error) {
-                              console.error('Signup error:', result.error);
+                              console.error('[Signup] Error from API:', result.error);
                               setError(result.error.message || 'Kayıt başarısız');
+                              
+                              // Check if user was created despite error (email confirmation case)
+                              if (result.data?.user) {
+                                  console.log('[Signup] User created but has error, checking if we can proceed...');
+                                  // Try to get profile anyway
+                                  try {
+                                      const prof = await window.OrbitApi.auth.getProfile(result.data.user.id);
+                                      if (prof?.data) {
+                                          const payload = { 
+                                              name: prof.data.display_name || nm, 
+                                              username: prof.data.username || un, 
+                                              avatarColor: 'bg-primary', 
+                                              avatarUrl: prof.data.avatar_url || null 
+                                          };
+                                          onSuccess && onSuccess(payload);
+                                          return;
+                                      }
+                                  } catch (profErr) {
+                                      console.error('[Signup] Profile fetch failed:', profErr);
+                                  }
+                              }
                               return;
                           }
                           
                           if (!result.data?.user) {
+                              console.error('[Signup] No user in result:', result);
                               setError('Kayıt başarısız. Lütfen tekrar deneyin.');
                               return;
                           }
                           
+                          console.log('[Signup] Success! Fetching profile for user:', result.data.user.id);
                           const prof = await window.OrbitApi.auth.getProfile(result.data.user.id);
+                          console.log('[Signup] Profile fetched:', prof);
+                          
                           const payload = { 
                               name: prof?.data?.display_name || nm, 
                               username: prof?.data?.username || un, 
@@ -575,6 +600,7 @@
                               }
                           }, 500);
                           
+                          console.log('[Signup] Calling onSuccess with payload:', payload);
                           onSuccess && onSuccess(payload);
                       } catch (e) {
                           console.error(e);

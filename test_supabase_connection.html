@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Connection Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <button onclick="testConnection()">Test Connection</button>
+    <button onclick="testSignup()">Test Signup</button>
+    <div id="results"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://cohjxujvdfbsohhlvnus.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvaGp4dWp2ZGZic29oaGx2bnVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNTAyNTcsImV4cCI6MjA3OTcyNjI1N30.FCmAi1McUKYV4y5tgBxKhY-Yku95JMu8-rtc2TJhdzs';
+
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        async function testConnection() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<p>Testing connection...</p>';
+
+            try {
+                // Test 1: Check auth
+                const { data: sessionData, error: sessionError } = await client.auth.getSession();
+                results.innerHTML += `<p>Auth Session: ${sessionError ? 'ERROR: ' + sessionError.message : 'OK'}</p>`;
+
+                // Test 2: Check profiles table
+                const { data: profilesData, error: profilesError } = await client
+                    .from('profiles')
+                    .select('*')
+                    .limit(1);
+                results.innerHTML += `<p>Profiles Table: ${profilesError ? 'ERROR: ' + profilesError.message : 'OK (found ' + (profilesData?.length || 0) + ' profiles)'}</p>`;
+
+                // Test 3: Check groups table
+                const { data: groupsData, error: groupsError } = await client
+                    .from('groups')
+                    .select('*')
+                    .limit(1);
+                results.innerHTML += `<p>Groups Table: ${groupsError ? 'ERROR: ' + groupsError.message : 'OK (found ' + (groupsData?.length || 0) + ' groups)'}</p>`;
+
+                // Test 4: Check posts table
+                const { data: postsData, error: postsError } = await client
+                    .from('posts')
+                    .select('*')
+                    .limit(1);
+                results.innerHTML += `<p>Posts Table: ${postsError ? 'ERROR: ' + postsError.message : 'OK (found ' + (postsData?.length || 0) + ' posts)'}</p>`;
+
+            } catch (error) {
+                results.innerHTML += `<p style="color: red;">Exception: ${error.message}</p>`;
+            }
+        }
+
+        async function testSignup() {
+            const results = document.getElementById('results');
+            const testEmail = 'test' + Date.now() + '@test.com';
+            const testPassword = 'Test123456!';
+
+            results.innerHTML = '<p>Testing signup...</p>';
+
+            try {
+                const { data, error } = await client.auth.signUp({
+                    email: testEmail,
+                    password: testPassword,
+                    options: {
+                        data: {
+                            username: 'testuser',
+                            display_name: 'Test User'
+                        }
+                    }
+                });
+
+                if (error) {
+                    results.innerHTML += `<p style="color: red;">Signup Error: ${error.message}</p>`;
+                } else {
+                    results.innerHTML += `<p style="color: green;">Signup Success!</p>`;
+                    results.innerHTML += `<p>User ID: ${data.user?.id}</p>`;
+                    results.innerHTML += `<p>Email: ${data.user?.email}</p>`;
+                    results.innerHTML += `<p>Has Session: ${!!data.session}</p>`;
+
+                    // Check if user exists in auth.users
+                    const { data: usersData, error: usersError } = await client.auth.admin?.listUsers();
+                    if (usersError) {
+                        results.innerHTML += `<p>Cannot check auth.users (admin access needed)</p>`;
+                    } else {
+                        results.innerHTML += `<p>Users in auth: ${usersData?.users?.length || 0}</p>`;
+                    }
+                }
+            } catch (error) {
+                results.innerHTML += `<p style="color: red;">Exception: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
+

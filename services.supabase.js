@@ -52,32 +52,67 @@
                 console.log('[OrbitApi] Signup response:', { 
                     hasUser: !!authData?.user, 
                     hasSession: !!authData?.session,
+                    userId: authData?.user?.id,
+                    userEmail: authData?.user?.email,
                     error: authError 
                 });
 
                 if (authError) {
                     console.error('[OrbitApi] Signup error:', authError);
+                    console.error('[OrbitApi] Error details:', {
+                        message: authError.message,
+                        status: authError.status,
+                        code: authError.code
+                    });
                     return { data: null, error: authError };
                 }
 
+                if (!authData?.user) {
+                    console.error('[OrbitApi] Signup succeeded but no user returned');
+                    return { 
+                        data: null, 
+                        error: { message: 'Kayıt başarısız: Kullanıcı oluşturulamadı' } 
+                    };
+                }
+
+                console.log('[OrbitApi] User created successfully:', {
+                    id: authData.user.id,
+                    email: authData.user.email,
+                    emailConfirmed: !!authData.user.email_confirmed_at
+                });
+
                 // Create user profile in profiles table
                 if (authData.user) {
-                    const { error: profileError } = await client
-                        .from('profiles')
-                        .insert({
-                            id: authData.user.id,
-                            username: username,
-                            display_name: displayName,
-                            email: email,
-                            avatar_url: null,
-                            avatar_color: null,
-                            created_at: new Date().toISOString()
-                        });
+                    console.log('[OrbitApi] Creating profile for user:', authData.user.id);
+                    try {
+                        const { data: profileData, error: profileError } = await client
+                            .from('profiles')
+                            .insert({
+                                id: authData.user.id,
+                                username: username,
+                                display_name: displayName,
+                                email: email,
+                                avatar_url: null,
+                                avatar_color: null,
+                                created_at: new Date().toISOString()
+                            })
+                            .select()
+                            .single();
 
-                    if (profileError) {
-                        console.error('[OrbitApi] Profile creation failed:', profileError);
-                        // Don't fail signup if profile creation fails, but log it
+                        if (profileError) {
+                            console.error('[OrbitApi] Profile creation failed:', profileError);
+                            // If profile already exists, that's okay
+                            if (!profileError.message?.includes('duplicate') && !profileError.code?.includes('23505')) {
+                                console.warn('[OrbitApi] Profile creation error (non-duplicate):', profileError);
+                            }
+                        } else {
+                            console.log('[OrbitApi] Profile created successfully:', profileData);
+                        }
+                    } catch (profileErr) {
+                        console.error('[OrbitApi] Profile creation exception:', profileErr);
                     }
+                } else {
+                    console.warn('[OrbitApi] No user in authData, cannot create profile');
                 }
 
                 // Check if email confirmation is required
