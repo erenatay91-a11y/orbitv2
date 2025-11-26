@@ -1,0 +1,10 @@
+# Netlify Redirects File
+# This ensures all routes work correctly for the SPA
+
+# Redirect root to main HTML file
+/ /orbitv7.html 200
+
+# Catch all - redirect everything to orbitv7.html (for SPA routing)
+/* /orbitv7.html 200
+
+
