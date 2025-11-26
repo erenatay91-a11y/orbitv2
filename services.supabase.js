@@ -674,6 +674,35 @@
         comments: commentsService
     };
 
+    // Also expose init function for delayed initialization
+    window.initOrbitApi = function() {
+        if (!window.OrbitApi) {
+            window.OrbitApi = {
+                auth: authService,
+                posts: postsService,
+                groups: groupsService,
+                comments: commentsService
+            };
+        }
+        console.log('[OrbitApi] Services initialized');
+    };
+
     console.log('[OrbitApi] Services initialized');
+    
+    // Wait for Supabase client if not ready
+    if (!window.supabaseClient) {
+        console.warn('[OrbitApi] Supabase client not ready, will retry...');
+        let retries = 0;
+        const checkClient = setInterval(() => {
+            retries++;
+            if (window.supabaseClient) {
+                console.log('[OrbitApi] Supabase client now available');
+                clearInterval(checkClient);
+            } else if (retries > 50) {
+                console.error('[OrbitApi] Supabase client still not available after 5 seconds');
+                clearInterval(checkClient);
+            }
+        }, 100);
+    }
 })();
 
