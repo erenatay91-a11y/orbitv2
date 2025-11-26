@@ -4,39 +4,88 @@
 (function() {
     'use strict';
 
-    // Wait for Supabase client to be initialized
+    // Wait for Supabase client to be initialized with retry mechanism
     function getClient() {
-        if (!window.supabaseClient) {
-            console.warn('[OrbitApi] Supabase client not initialized');
-            return null;
+        if (window.supabaseClient) {
+            return window.supabaseClient;
         }
-        return window.supabaseClient;
+        
+        // Retry mechanism: wait for client to be initialized
+        console.warn('[OrbitApi] Supabase client not initialized, waiting...');
+        
+        // Check if initialization is in progress
+        if (!window.supabaseInitPromise) {
+            window.supabaseInitPromise = new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 20; // 2 seconds max wait
+                const checkInterval = setInterval(() => {
+                    attempts++;
+                    if (window.supabaseClient) {
+                        clearInterval(checkInterval);
+                        resolve(window.supabaseClient);
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(checkInterval);
+                        console.error('[OrbitApi] Supabase client initialization timeout');
+                        resolve(null);
+                    }
+                }, 100);
+            });
+        }
+        
+        // For synchronous calls, return null and let the async function handle retry
+        return null;
+    }
+    
+    // Async version that waits for client
+    async function getClientAsync() {
+        if (window.supabaseClient) {
+            return window.supabaseClient;
+        }
+        
+        if (window.supabaseInitPromise) {
+            return await window.supabaseInitPromise;
+        }
+        
+        // Wait up to 2 seconds
+        for (let i = 0; i < 20; i++) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            if (window.supabaseClient) {
+                return window.supabaseClient;
+            }
+        }
+        
+        console.error('[OrbitApi] Failed to get Supabase client after retries');
+        return null;
     }
 
-    // Helper to get current user
-    function getCurrentUser() {
-        const client = getClient();
+    // Helper to get current user (async)
+    async function getCurrentUser() {
+        const client = await getClientAsync();
         if (!client) return null;
         // Get user from auth session
-        return client.auth.getUser().then(({ data, error }) => {
+        try {
+            const { data, error } = await client.auth.getUser();
             if (error || !data?.user) return null;
             return data.user;
-        });
+        } catch (err) {
+            console.error('[OrbitApi] getCurrentUser error:', err);
+            return null;
+        }
     }
 
     // Auth Service
     const authService = {
         async signup({ email, password, username, displayName }) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
-                console.error('[OrbitApi] Signup: Client not available');
+                console.error('[OrbitApi] Signup: Client not available after retries');
                 console.error('[OrbitApi] Debug info:', {
                     hasWindow: typeof window !== 'undefined',
                     hasSupabase: typeof window.supabase !== 'undefined',
                     hasSupabaseClient: typeof window.supabaseClient !== 'undefined',
                     supabaseClient: window.supabaseClient
                 });
-                return { data: null, error: { message: 'Supabase client not initialized' } };
+                return { data: null, error: { message: 'Supabase client not initialized. Please refresh the page.' } };
             }
 
             try {
@@ -162,9 +211,9 @@
         },
 
         async login({ email, password }) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
-                return { data: null, error: { message: 'Supabase client not initialized' } };
+                return { data: null, error: { message: 'Supabase client not initialized. Please refresh the page.' } };
             }
 
             try {
@@ -203,7 +252,7 @@
         },
 
         async logout() {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) return { error: { message: 'Supabase client not initialized' } };
             
             const { error } = await client.auth.signOut();
@@ -211,7 +260,7 @@
         },
 
         async getProfile(userId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { data: null, error: { message: 'Supabase client not initialized' } };
             }
@@ -234,7 +283,7 @@
         },
 
         async getCurrentSession() {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { data: null, error: { message: 'Supabase client not initialized' } };
             }
@@ -247,7 +296,7 @@
     // Posts Service
     const postsService = {
         async createPost({ groupId, title, content, image_url, video_url, is_sensitive }) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { id: null, error: { message: 'Supabase client not initialized' } };
             }
@@ -284,7 +333,7 @@
         },
 
         async updatePost(postId, { title, content, image_url, video_url, is_sensitive }) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { id: null, error: { message: 'Supabase client not initialized' } };
             }
@@ -321,7 +370,7 @@
         },
 
         async deletePost(postId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { error: { message: 'Supabase client not initialized' } };
             }
@@ -345,7 +394,7 @@
         },
 
         async listFeed({ limit = 20, groupId = null } = {}) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return [];
             }
@@ -392,7 +441,7 @@
         },
 
         async likePost(postId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { error: { message: 'Supabase client not initialized' } };
             }
@@ -431,7 +480,7 @@
         },
 
         async unlikePost(postId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { error: { message: 'Supabase client not initialized' } };
             }
@@ -458,7 +507,7 @@
     // Groups Service
     const groupsService = {
         async listGroups() {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return [];
             }
@@ -482,7 +531,7 @@
         },
 
         async listMyJoinedGroupIds() {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return [];
             }
@@ -511,7 +560,7 @@
         },
 
         async createGroup({ name, slug, about, category, cover_gradient, icon_url, is_private }) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { id: null, error: { message: 'Supabase client not initialized' } };
             }
@@ -559,7 +608,7 @@
         },
 
         async joinGroup(groupId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { error: { message: 'Supabase client not initialized' } };
             }
@@ -598,7 +647,7 @@
         },
 
         async leaveGroup(groupId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { error: { message: 'Supabase client not initialized' } };
             }
@@ -625,7 +674,7 @@
     // Comments Service
     const commentsService = {
         async addComment({ postId, text, parentId = null }) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return { id: null, error: { message: 'Supabase client not initialized' } };
             }
@@ -659,7 +708,7 @@
         },
 
         async listComments(postId) {
-            const client = getClient();
+            const client = await getClientAsync();
             if (!client) {
                 return [];
             }
