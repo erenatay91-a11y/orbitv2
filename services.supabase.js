@@ -30,14 +30,27 @@
             const client = getClient();
             if (!client) {
                 console.error('[OrbitApi] Signup: Client not available');
+                console.error('[OrbitApi] Debug info:', {
+                    hasWindow: typeof window !== 'undefined',
+                    hasSupabase: typeof window.supabase !== 'undefined',
+                    hasSupabaseClient: typeof window.supabaseClient !== 'undefined',
+                    supabaseClient: window.supabaseClient
+                });
                 return { data: null, error: { message: 'Supabase client not initialized' } };
             }
 
             try {
                 console.log('[OrbitApi] Signup: Attempting signup for', email);
+                console.log('[OrbitApi] Signup: Client available:', {
+                    hasClient: !!client,
+                    clientType: typeof client,
+                    hasAuth: !!client.auth,
+                    hasSignUp: typeof client.auth?.signUp === 'function'
+                });
+                
                 // Sign up with email and password
                 // Note: If email confirmation is required, user will need to confirm email before login
-                const { data: authData, error: authError } = await client.auth.signUp({
+                const signUpOptions = {
                     email,
                     password,
                     options: {
@@ -47,14 +60,25 @@
                         },
                         emailRedirectTo: window.location.origin || 'http://localhost:5500'
                     }
+                };
+                
+                console.log('[OrbitApi] Signup: Calling signUp with options:', {
+                    email: signUpOptions.email,
+                    hasPassword: !!signUpOptions.password,
+                    username: signUpOptions.options.data.username,
+                    redirectTo: signUpOptions.options.emailRedirectTo
                 });
+                
+                const { data: authData, error: authError } = await client.auth.signUp(signUpOptions);
 
                 console.log('[OrbitApi] Signup response:', { 
                     hasUser: !!authData?.user, 
                     hasSession: !!authData?.session,
                     userId: authData?.user?.id,
                     userEmail: authData?.user?.email,
-                    error: authError 
+                    emailConfirmed: !!authData?.user?.email_confirmed_at,
+                    error: authError,
+                    fullResponse: authData
                 });
 
                 if (authError) {
@@ -62,13 +86,16 @@
                     console.error('[OrbitApi] Error details:', {
                         message: authError.message,
                         status: authError.status,
-                        code: authError.code
+                        code: authError.code,
+                        name: authError.name,
+                        stack: authError.stack
                     });
                     return { data: null, error: authError };
                 }
 
                 if (!authData?.user) {
                     console.error('[OrbitApi] Signup succeeded but no user returned');
+                    console.error('[OrbitApi] Full authData:', authData);
                     return { 
                         data: null, 
                         error: { message: 'Kayıt başarısız: Kullanıcı oluşturulamadı' } 
@@ -78,7 +105,8 @@
                 console.log('[OrbitApi] User created successfully:', {
                     id: authData.user.id,
                     email: authData.user.email,
-                    emailConfirmed: !!authData.user.email_confirmed_at
+                    emailConfirmed: !!authData.user.email_confirmed_at,
+                    createdAt: authData.user.created_at
                 });
 
                 // Create user profile in profiles table
